@@ -1,8 +1,7 @@
 # AuraHire AI
 
 <div align="center">
-  <img width="100" height="100" alt="ChatGPT Image Aug 22, 2025, 03_02_19 PM" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="https://github.com/user-attachments/assets/4fe15ce4-580c-45e4-9ca6-4eeb07364d40" />
-"" />
+  <img width="100" height="100" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="https://github.com/user-attachments/assets/7e524efc-0d0e-4bf2-b7b4-eaeaf1d60ffa" />
 
 A comprehensive full-stack application featuring a Streamlit frontend and FastAPI backend with PostgreSQL database integration for intelligent resume-job matching.
 
