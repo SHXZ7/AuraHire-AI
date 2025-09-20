@@ -1,7 +1,9 @@
 # AuraHire AI
 
 <div align="center">
-  <img width="100" height="100" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="C:\Users\HP\Documents\try\ml\aura.png" />
+  <img src="aura.png" alt="AuraHire Logo" width="200" height="200">
+</div>
+
 
 A comprehensive full-stack application featuring a Streamlit frontend and FastAPI backend with PostgreSQL database integration for intelligent resume-job matching.
 
