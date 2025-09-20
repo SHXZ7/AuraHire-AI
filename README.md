@@ -136,7 +136,7 @@ The frontend connects to the FastAPI backend at `http://localhost:8000` with com
 - Real-time database visualization across multiple tabs
 - Color-coded match verdicts (High/Medium/Low)
 - Detailed skill breakdowns and missing skill highlighting
-- Export capabilities and data management tools
+- Export capabilities and data managementA tools
 
 ## Technical Stack
 
