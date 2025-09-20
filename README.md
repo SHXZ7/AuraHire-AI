@@ -1,7 +1,7 @@
 # AuraHire AI
 
 <div align="center">
-  <img width="100" height="100" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="https://github.com/user-attachments/assets/7e524efc-0d0e-4bf2-b7b4-eaeaf1d60ffa" />
+  <img width="100" height="100" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="C:\Users\HP\Documents\try\ml\aura.png" />
 
 A comprehensive full-stack application featuring a Streamlit frontend and FastAPI backend with PostgreSQL database integration for intelligent resume-job matching.
 
