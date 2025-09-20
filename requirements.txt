@@ -1,0 +1,26 @@
+# Web Framework
+fastapi
+uvicorn
+
+# PDF & DOCX Parsing
+pdfplumber
+python-docx
+
+# Utilities
+pydantic
+pydantic-settings
+
+# ML/NLP for enhanced matching
+scikit-learn
+sentence-transformers
+numpy
+
+streamlit
+requests
+
+# Database dependencies (PostgreSQL only)
+psycopg2-binary 
+sqlalchemy
+alembic
+asyncpg
+python-dotenv
