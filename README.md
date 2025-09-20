@@ -1,7 +1,8 @@
-# AutoFlow - Visual Workflow Automation Platform
+# AuraHire AI
 
 <div align="center">
-  <img width="100" height="100" alt="ChatGPT Image Aug 22, 2025, 03_02_19 PM" src="https://github.com/user-attachments/assets/7df6f149-cb82-4cfc-a4fb-54058c4999b3" />
+  <img width="100" height="100" alt="ChatGPT Image Aug 22, 2025, 03_02_19 PM" src=<img width="500" height="500" alt="Gemini_Generated_Image_ju3v3vju3v3vju3v-removebg-preview" src="https://github.com/user-attachments/assets/4fe15ce4-580c-45e4-9ca6-4eeb07364d40" />
+"" />
 
 A comprehensive full-stack application featuring a Streamlit frontend and FastAPI backend with PostgreSQL database integration for intelligent resume-job matching.
 
