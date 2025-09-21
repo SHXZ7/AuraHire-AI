@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Request, Form
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict
+from fastapi.middleware.cors import CORSMiddleware
 import time
 from datetime import datetime
 
@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 app = FastAPI(title="Enhanced Resume & Job Matcher API", version="2.0.0")
 
+
 # Configure CORS for Streamlit Cloud deployment
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Create database tables on startup
 @app.on_event("startup")
