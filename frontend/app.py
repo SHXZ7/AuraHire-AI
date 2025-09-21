@@ -14,21 +14,48 @@ st.set_page_config(
 API_BASE_URL = "https://aurahire-ai.onrender.com"
 
 def call_api(endpoint: str, method: str = "GET", data: Dict = None, files: Dict = None) -> Dict[Any, Any]:
-    """Helper function to call FastAPI endpoints"""
+    """Helper function to call FastAPI endpoints with improved error handling"""
     url = f"{API_BASE_URL}{endpoint}"
+    
     try:
+        # Add timeout for better error handling
         if method == "POST":
             if files:
-                response = requests.post(url, data=data, files=files)
+                response = requests.post(url, data=data, files=files, timeout=30)
             else:
-                response = requests.post(url, json=data)
+                response = requests.post(url, json=data, timeout=30)
         else:
-            response = requests.get(url)
+            response = requests.get(url, timeout=30)
         
+        # Check for successful response
         response.raise_for_status()
         return response.json()
+        
+    except requests.exceptions.Timeout:
+        st.error(f"⏱️ Request timeout: {endpoint} - Your backend might be sleeping (common on free Render plans)")
+        st.info("💡 Try refreshing the page in a few seconds to wake up the backend service")
+        return {}
+    except requests.exceptions.ConnectionError:
+        st.error(f"🔌 Connection error: Cannot reach {API_BASE_URL}")
+        st.info("💡 Check if your backend is running at the correct URL")
+        return {}
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            st.error(f"🔍 Endpoint not found: {endpoint}")
+            st.info("💡 This endpoint might not be available in your backend deployment")
+        elif e.response.status_code == 500:
+            st.error(f"🚨 Backend server error on {endpoint}")
+            try:
+                error_detail = e.response.json()
+                st.json(error_detail)
+            except:
+                st.write(f"Raw error: {e.response.text}")
+        else:
+            st.error(f"❌ HTTP {e.response.status_code}: {endpoint}")
+        return {}
     except requests.exceptions.RequestException as e:
-        st.error(f"API Error: {str(e)}")
+        st.error(f"🔥 Unexpected API error: {str(e)}")
+        st.write(f"URL: {url}")
         return {}
 
 def main():
@@ -48,7 +75,34 @@ def main():
                 st.error("❌ API Disconnected")
         except:
             st.error("❌ API Disconnected")
-            st.markdown("Make sure to run: `uvicorn backend.main:app --reload`")
+            st.markdown("Make sure your backend is running at:")
+            st.code(API_BASE_URL)
+        
+        # Endpoint diagnostics
+        st.markdown("### 🔍 Endpoint Diagnostics")
+        if st.button("Test All Endpoints"):
+            endpoints_to_test = [
+                "/",
+                "/statistics", 
+                "/resumes?skip=0&limit=1",
+                "/jobs?skip=0&limit=1",
+                "/matches?skip=0&limit=1", 
+                "/audit-logs?skip=0&limit=1"
+            ]
+            
+            st.markdown("**Testing endpoints:**")
+            for endpoint in endpoints_to_test:
+                try:
+                    result = call_api(endpoint)
+                    if result:
+                        st.success(f"✅ {endpoint}")
+                    else:
+                        st.error(f"❌ {endpoint}")
+                except Exception as e:
+                    st.error(f"❌ {endpoint}: {str(e)}")
+        
+        st.markdown("### 📡 Backend URL")
+        st.code(API_BASE_URL)
     
     # Main interface tabs
     tab1, tab2, tab3, tab4 = st.tabs(["🚀 Quick Match", "📄 Resume Parser", "💼 Job Parser", "📊 Database History"])
@@ -111,12 +165,32 @@ def main():
         
         st.info(f"📊 Final weights: {hard_weight:.1%} Hard Skills + {soft_weight:.1%} Semantic Match")
         
-        # Match button
-        if st.button("🎯 Analyze Match", type="primary", use_container_width=True):
-            if uploaded_file and jd_text and required_skills:
-                with st.spinner("🔍 Analyzing resume against job requirements..."):
+        # Quick connectivity test
+        col_test, col_match = st.columns([1, 2])
+        
+        with col_test:
+            if st.button("🔌 Test API", help="Quick test to check if backend is responding"):
+                with st.spinner("Testing connection..."):
+                    test_result = call_api("/")
+                    if test_result:
+                        st.success("✅ Backend is responding!")
+                        st.json(test_result)
+                    else:
+                        st.error("❌ Backend not responding")
+        
+        with col_match:
+            # Match button
+            if st.button("🎯 Analyze Match", type="primary", use_container_width=True):
+              if uploaded_file and jd_text and required_skills:
+                # Create progress indicators
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                try:
+                    # Step 1: Prepare data
+                    status_text.text("🔄 Preparing data...")
+                    progress_bar.progress(20)
                     
-                    # Prepare data for API call
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
                     data = {
                         "jd_text": jd_text,
@@ -125,13 +199,73 @@ def main():
                         "soft_weight": soft_weight
                     }
                     
-                    # Call matching API
+                    # Step 2: Call API
+                    status_text.text("🚀 Sending to backend...")
+                    progress_bar.progress(40)
+                    
+                    # Debug info
+                    with st.expander("🔍 Debug Info"):
+                        st.write(f"**API URL:** {API_BASE_URL}/match-resume-file")
+                        st.write(f"**File:** {uploaded_file.name} ({uploaded_file.size} bytes)")
+                        st.write(f"**Skills:** {required_skills}")
+                        st.write(f"**JD Length:** {len(jd_text)} characters")
+                    
+                    # Call matching API with timeout handling
+                    status_text.text("🧠 AI analyzing match...")
+                    progress_bar.progress(60)
+                    
                     result = call_api("/match-resume-file", method="POST", data=data, files=files)
                     
+                    # Step 3: Process results
+                    progress_bar.progress(80)
+                    status_text.text("📊 Processing results...")
+                    
                     if result:
-                        display_match_results(result.get("match_result", {}))
+                        progress_bar.progress(100)
+                        status_text.text("✅ Analysis complete!")
+                        
+                        # Clear progress indicators
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        # Display results
+                        if "match_result" in result:
+                            display_match_results(result["match_result"])
+                        else:
+                            st.error("❌ Invalid response format from backend")
+                            st.json(result)
+                    else:
+                        # Clear progress indicators
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        st.error("❌ Failed to get response from backend")
+                        st.info("💡 **Troubleshooting tips:**")
+                        st.markdown("""
+                        1. **Backend sleeping?** Wait 15 seconds and try again
+                        2. **Check API status** in the sidebar
+                        3. **File too large?** Try a smaller resume file
+                        4. **Skills format** should be comma-separated (e.g., 'python, react, sql')
+                        """)
+                        
+                except Exception as e:
+                    # Clear progress indicators
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    st.error(f"🚨 Unexpected error: {str(e)}")
+                    st.info("💡 Try refreshing the page and testing again")
+                    
             else:
-                st.warning("⚠️ Please upload a resume, enter job description, and specify required skills")
+                missing_items = []
+                if not uploaded_file:
+                    missing_items.append("Resume file")
+                if not jd_text.strip():
+                    missing_items.append("Job description")
+                if not required_skills.strip():
+                    missing_items.append("Required skills")
+                
+                st.warning(f"⚠️ Please provide: {', '.join(missing_items)}")
     
     # Tab 2: Resume Parser
     with tab2:
