@@ -1,6 +1,6 @@
 # Web Framework
 fastapi
-uvicorn[standard]
+uvicorn
 
 # PDF & DOCX Parsing
 pdfplumber
@@ -15,14 +15,13 @@ scikit-learn
 sentence-transformers
 numpy
 
-# Frontend
 streamlit
 requests
 
 # Database dependencies (PostgreSQL only)
-psycopg2-binary
+psycopg2-binary 
 sqlalchemy
 alembic
 asyncpg
 python-dotenv
-python-multipart
+python-multipart 
