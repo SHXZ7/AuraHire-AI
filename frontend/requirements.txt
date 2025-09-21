@@ -1,0 +1,13 @@
+# Streamlit and Core
+streamlit==1.28.1
+requests==2.31.0
+
+# Image Processing (for logo)
+Pillow==10.1.0
+
+# Data Handling
+pandas==2.1.4
+numpy==1.24.4
+
+# Utilities
+python-dateutil==2.8.2

@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: aurahire-backend
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: |
+      pip install -r requirements.txt
+      alembic upgrade head
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /
+  
+  - type: pserv
+    name: aurahire-postgres
+    env: postgres
+    plan: starter
+    region: oregon
+    envVars:
+      - key: POSTGRES_DB
+        value: aurahire_db
+      - key: POSTGRES_USER
+        value: aurahire_user

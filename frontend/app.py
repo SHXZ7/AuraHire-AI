@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import json
 from typing import Dict, Any
+from PIL import Image
+import os
 
 # Configure Streamlit page
 st.set_page_config(
@@ -10,8 +12,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# API Configuration
-API_BASE_URL = "https://aurahire-ai.onrender.com/"
+# API Configuration - Use environment variable or default
+API_BASE_URL = os.getenv("API_BASE_URL", "https://aurahire-ai.onrender.com")
+# Remove trailing slash if present
+API_BASE_URL = API_BASE_URL.rstrip("/")
 
 def call_api(endpoint: str, method: str = "GET", data: Dict = None, files: Dict = None) -> Dict[Any, Any]:
     """Helper function to call FastAPI endpoints"""
