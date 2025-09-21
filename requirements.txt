@@ -13,7 +13,7 @@ pydantic-settings==2.1.0
 # ML/NLP for enhanced matching
 scikit-learn==1.3.2
 sentence-transformers==2.2.2
-numpy==1.24.4
+numpy==1.26.4numpy==1.26.4
 
 # Frontend (for Streamlit deployment)
 streamlit==1.28.1
