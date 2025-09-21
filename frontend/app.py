@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "https://aurahire-ai.onrender.com/"
+API_BASE_URL = "https://aurahire-ai.onrender.com"
 
 def call_api(endpoint: str, method: str = "GET", data: Dict = None, files: Dict = None) -> Dict[Any, Any]:
     """Helper function to call FastAPI endpoints"""
