@@ -1,6 +1,6 @@
 # Web Framework
-fastapi
-uvicorn
+fastapi==0.95.2
+uvicorn==0.22.0
 
 # PDF & DOCX Parsing
 pdfplumber
@@ -8,7 +8,6 @@ python-docx
 
 # Utilities
 pydantic==1.10.13
-pydantic-settings
 
 # ML/NLP for enhanced matching
 scikit-learn
@@ -19,8 +18,8 @@ streamlit
 requests
 
 # MongoDB dependencies
-pymongo
-motor
-beanie
+pymongo==4.6.3
+motor==3.3.2
+beanie==1.20.0
 python-dotenv
-python-multipart 
+python-multipart
