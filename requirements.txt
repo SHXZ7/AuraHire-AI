@@ -7,7 +7,7 @@ pdfplumber
 python-docx
 
 # Utilities
-pydantic
+pydantic==1.10.13
 pydantic-settings
 
 # ML/NLP for enhanced matching
