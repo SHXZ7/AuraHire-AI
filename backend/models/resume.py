@@ -1,49 +1,59 @@
 # backend/models/resume.py
 
-from sqlalchemy import Column, String, Text, JSON, Integer, Float, Boolean
+from typing import List, Optional
+from pydantic import Field
 from .base import BaseModel
 
 class Resume(BaseModel):
-    """Resume model for storing parsed resume data"""
-    __tablename__ = "resumes"
+    """Resume model for storing parsed resume data in MongoDB"""
     
     # File information
-    filename = Column(String(255), nullable=False)
-    file_size = Column(Integer)
-    file_type = Column(String(50))  # pdf, docx, txt
+    filename: str = Field(..., index=True)
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None  # pdf, docx, txt
     
     # Raw content
-    raw_text = Column(Text, nullable=False)
+    raw_text: str = Field(...)
     
     # Parsed personal information
-    candidate_name = Column(String(255))
-    emails = Column(JSON)  # List of email addresses
-    phones = Column(JSON)  # List of phone numbers
+    candidate_name: Optional[str] = Field(default=None, index=True)
+    emails: Optional[List[str]] = Field(default=[])
+    phones: Optional[List[str]] = Field(default=[])
     
     # Technical profile
-    skills = Column(JSON)  # List of extracted skills
-    experience_years = Column(Integer)
-    certifications = Column(JSON)  # List of certifications
+    skills: Optional[List[str]] = Field(default=[], index=True)
+    experience_years: Optional[int] = None
+    certifications: Optional[List[str]] = Field(default=[])
     
     # Education
-    education = Column(JSON)  # List of education records
+    education: Optional[List[dict]] = Field(default=[])
     
     # Resume sections
-    sections = Column(JSON)  # Detected sections and their content
+    sections: Optional[dict] = Field(default={})
     
     # Statistics
-    total_characters = Column(Integer)
-    total_words = Column(Integer)
-    total_lines = Column(Integer)
-    skills_count = Column(Integer)
-    education_count = Column(Integer)
-    certifications_count = Column(Integer)
+    total_characters: Optional[int] = None
+    total_words: Optional[int] = None
+    total_lines: Optional[int] = None
+    skills_count: Optional[int] = None
+    education_count: Optional[int] = None
+    certifications_count: Optional[int] = None
     
     # Processing status
-    is_processed = Column(Boolean, default=False)
-    processing_error = Column(Text)
+    is_processed: bool = Field(default=False, index=True)
+    processing_error: Optional[str] = None
     
     # Metadata
-    uploaded_by = Column(String(255))  # For future user authentication
-    tags = Column(JSON)  # For categorization
-    notes = Column(Text)  # For user notes
+    uploaded_by: Optional[str] = None  # For future user authentication
+    tags: Optional[List[str]] = Field(default=[])
+    notes: Optional[str] = None
+    
+    class Settings:
+        name = "resumes"  # MongoDB collection name
+        indexes = [
+            "filename",
+            "candidate_name", 
+            "skills",
+            "is_processed",
+            "created_at"
+        ]

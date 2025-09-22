@@ -1,9 +1,9 @@
 # backend/crud/__init__.py
 
-from .resume import ResumeRepository, resume_repository
-from .job_description import JobDescriptionRepository, job_description_repository
-from .match_result import MatchResultRepository, match_result_repository
-from .audit_log import AuditLogRepository, audit_log_repository
+from .resume import ResumeRepository, resume_repository, async_resume_repository
+from .job_description import JobDescriptionRepository, job_description_repository, async_job_description_repository
+from .match_result import MatchResultRepository, match_result_repository, async_match_result_repository
+from .audit_log import AuditLogRepository, audit_log_repository, async_audit_log_repository
 
 __all__ = [
     "ResumeRepository", 
@@ -13,5 +13,9 @@ __all__ = [
     "resume_repository",
     "job_description_repository", 
     "match_result_repository", 
-    "audit_log_repository"
+    "audit_log_repository",
+    "async_resume_repository",
+    "async_job_description_repository",
+    "async_match_result_repository", 
+    "async_audit_log_repository"
 ]

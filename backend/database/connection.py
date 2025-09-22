@@ -1,63 +1,65 @@
 # backend/database/connection.py
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 from .config import db_config
-from ..models.base import Base
+from ..models.resume import Resume
+from ..models.job_description import JobDescription
+from ..models.match_result import MatchResult
+from ..models.audit_log import AuditLog
 
-# Synchronous engine for migrations and initial setup
-engine = create_engine(
-    db_config.get_database_url(),
-    echo=db_config.echo_sql,
-    pool_size=db_config.pool_size,
-    max_overflow=db_config.max_overflow,
-    pool_timeout=db_config.pool_timeout,
-    pool_recycle=db_config.pool_recycle,
-)
+# Global MongoDB client
+mongodb_client: AsyncIOMotorClient = None
 
-# Async engine for FastAPI operations
-async_engine = create_async_engine(
-    db_config.get_async_database_url(),
-    echo=db_config.echo_sql,
-    pool_size=db_config.pool_size,
-    max_overflow=db_config.max_overflow,
-    pool_timeout=db_config.pool_timeout,
-    pool_recycle=db_config.pool_recycle,
-)
+async def connect_to_mongo():
+    """Create database connection"""
+    global mongodb_client
+    mongodb_client = AsyncIOMotorClient(
+        db_config.get_mongodb_url(),
+        maxPoolSize=db_config.max_connections,
+        minPoolSize=db_config.min_connections,
+        serverSelectionTimeoutMS=db_config.server_selection_timeout_ms,
+        connectTimeoutMS=db_config.connect_timeout_ms,
+        socketTimeoutMS=db_config.socket_timeout_ms,
+        retryWrites=db_config.retry_writes
+    )
+    
+    # Initialize Beanie with the database and models
+    await init_beanie(
+        database=mongodb_client[db_config.get_database_name()],
+        document_models=[
+            Resume,
+            JobDescription, 
+            MatchResult,
+            AuditLog
+        ]
+    )
 
-# Session factories
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-AsyncSessionLocal = sessionmaker(
-    bind=async_engine, 
-    class_=AsyncSession, 
-    autocommit=False, 
-    autoflush=False
-)
+async def close_mongo_connection():
+    """Close database connection"""
+    global mongodb_client
+    if mongodb_client:
+        mongodb_client.close()
 
-def get_db():
-    """Dependency to get database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+def get_database():
+    """Get the MongoDB database instance"""
+    return mongodb_client[db_config.get_database_name()]
 
-async def get_async_db():
-    """Dependency to get async database session"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+# For backward compatibility with dependency injection
+async def get_db():
+    """Dependency to get database - for MongoDB this just returns None since Beanie handles connections"""
+    # With Beanie, we don't need to inject database sessions like SQLAlchemy
+    # Models handle their own database operations
+    return None
 
-def create_tables():
-    """Create all database tables"""
-    Base.metadata.create_all(bind=engine)
+# Initialization function for FastAPI startup
+async def init_database():
+    """Initialize database connection and models"""
+    await connect_to_mongo()
+    print(f"Connected to MongoDB database: {db_config.get_database_name()}")
 
-def drop_tables():
-    """Drop all database tables (use with caution!)"""
-    Base.metadata.drop_all(bind=engine)
+# Cleanup function for FastAPI shutdown  
+async def close_database():
+    """Close database connections"""
+    await close_mongo_connection()
+    print("Disconnected from MongoDB")

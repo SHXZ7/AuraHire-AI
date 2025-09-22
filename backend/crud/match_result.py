@@ -1,224 +1,200 @@
 # backend/crud/match_result.py
 
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, and_, or_, desc
-from .base import BaseRepository
+from .base import BaseRepository, SyncRepository
 from ..models.match_result import MatchResult
 from ..models.resume import Resume
 from ..models.job_description import JobDescription
 
 class MatchResultRepository(BaseRepository[MatchResult]):
-    """Repository for Match Result operations"""
+    """Repository for Match Result operations with MongoDB"""
     
     def __init__(self):
         super().__init__(MatchResult)
     
-    def get_with_relations(self, db: Session, id: int) -> Optional[MatchResult]:
-        """Get match result with resume and job description"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(MatchResult.id == id)
-            .first()
-        )
+    async def get_with_relations(self, id: str) -> Optional[MatchResult]:
+        """Get match result with populated resume and job description"""
+        return await MatchResult.get(id, fetch_links=True)
     
-    def get_by_resume_id(self, db: Session, resume_id: int, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def get_by_resume_id(self, resume_id: str, skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Get all match results for a specific resume"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.job_description))
-            .filter(MatchResult.resume_id == resume_id)
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return await (MatchResult
+                     .find(MatchResult.resume_id == resume_id)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_by_job_id(self, db: Session, job_id: int, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def get_by_job_id(self, job_id: str, skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Get all match results for a specific job"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume))
-            .filter(MatchResult.job_description_id == job_id)
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return await (MatchResult
+                     .find(MatchResult.job_description_id == job_id)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_best_matches(self, db: Session, min_score: float = 70.0, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def get_best_matches(self, min_score: float = 70.0, skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Get best match results above threshold"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(MatchResult.overall_score >= min_score)
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return await (MatchResult
+                     .find(MatchResult.overall_score >= min_score)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_by_verdict(self, db: Session, verdict: str, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def get_by_verdict(self, verdict: str, skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Get match results by verdict (High, Medium, Low)"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(MatchResult.verdict == verdict)
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return await (MatchResult
+                     .find(MatchResult.verdict == verdict)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_bookmarked_matches(self, db: Session, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def get_bookmarked_matches(self, skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Get bookmarked match results"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(MatchResult.is_bookmarked == True)
-            .order_by(desc(MatchResult.created_at))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        return await (MatchResult
+                     .find(MatchResult.is_bookmarked == True)
+                     .sort(-MatchResult.created_at)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_by_score_range(
+    async def get_by_score_range(
         self, 
-        db: Session, 
         min_score: float, 
         max_score: float, 
         skip: int = 0, 
         limit: int = 100
     ) -> List[MatchResult]:
         """Get match results within score range"""
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(
-                and_(
-                    MatchResult.overall_score >= min_score,
-                    MatchResult.overall_score <= max_score
-                )
-            )
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = {
+            "overall_score": {
+                "$gte": min_score,
+                "$lte": max_score
+            }
+        }
+        return await (MatchResult
+                     .find(query)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def search_by_skills(self, db: Session, skills: List[str], skip: int = 0, limit: int = 100) -> List[MatchResult]:
+    async def search_by_skills(self, skills: List[str], skip: int = 0, limit: int = 100) -> List[MatchResult]:
         """Search match results by matched skills"""
-        filters = []
-        for skill in skills:
-            filters.append(MatchResult.matched_skills.op('?')(skill))
-        
-        return (
-            db.query(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .filter(or_(*filters))
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = {"matched_skills": {"$in": skills}}
+        return await (MatchResult
+                     .find(query)
+                     .sort(-MatchResult.overall_score)
+                     .skip(skip)
+                     .limit(limit)
+                     .to_list())
     
-    def get_statistics(self, db: Session) -> Dict[str, Any]:
+    async def get_statistics(self) -> Dict[str, Any]:
         """Get match result statistics"""
-        total_matches = db.query(MatchResult).count()
+        total_count = await MatchResult.count()
         
         # Verdict distribution
-        verdict_stats = (
-            db.query(MatchResult.verdict, func.count(MatchResult.id).label('count'))
-            .group_by(MatchResult.verdict)
-            .all()
-        )
+        verdict_pipeline = [
+            {"$group": {"_id": "$verdict", "count": {"$sum": 1}}}
+        ]
+        verdict_stats = await MatchResult.aggregate(verdict_pipeline).to_list()
+        verdict_distribution = {item["_id"]: item["count"] for item in verdict_stats}
         
         # Score statistics
-        score_stats = db.query(
-            func.avg(MatchResult.overall_score).label('avg_score'),
-            func.min(MatchResult.overall_score).label('min_score'),
-            func.max(MatchResult.overall_score).label('max_score'),
-            func.avg(MatchResult.hard_score).label('avg_hard_score'),
-            func.avg(MatchResult.soft_score).label('avg_soft_score')
-        ).first()
+        score_pipeline = [
+            {"$group": {
+                "_id": None,
+                "avg_score": {"$avg": "$overall_score"},
+                "min_score": {"$min": "$overall_score"},
+                "max_score": {"$max": "$overall_score"},
+                "avg_hard_score": {"$avg": "$hard_score"},
+                "avg_soft_score": {"$avg": "$soft_score"}
+            }}
+        ]
+        score_stats = await MatchResult.aggregate(score_pipeline).to_list(1)
+        scores = score_stats[0] if score_stats else {}
         
         # Performance statistics
-        performance_stats = db.query(
-            func.avg(MatchResult.processing_time_ms).label('avg_processing_time'),
-            func.min(MatchResult.processing_time_ms).label('min_processing_time'),
-            func.max(MatchResult.processing_time_ms).label('max_processing_time')
-        ).first()
+        performance_pipeline = [
+            {"$group": {
+                "_id": None,
+                "avg_processing_time": {"$avg": "$processing_time_ms"},
+                "min_processing_time": {"$min": "$processing_time_ms"},
+                "max_processing_time": {"$max": "$processing_time_ms"}
+            }}
+        ]
+        performance_stats = await MatchResult.aggregate(performance_pipeline).to_list(1)
+        performance = performance_stats[0] if performance_stats else {}
         
-        # Recent activity
+        # Recent activity (last 7 days)
         from datetime import datetime, timedelta
         seven_days_ago = datetime.utcnow() - timedelta(days=7)
-        recent_matches = db.query(func.count(MatchResult.id)).filter(
-            MatchResult.created_at >= seven_days_ago
-        ).scalar()
+        recent_query = MatchResult.find(MatchResult.created_at >= seven_days_ago)
+        recent_count = await recent_query.count()
         
-        bookmarked_count = db.query(MatchResult).filter(MatchResult.is_bookmarked == True).count()
+        # Bookmarked count
+        bookmarked_query = MatchResult.find(MatchResult.is_bookmarked == True)
+        bookmarked_count = await bookmarked_query.count()
         
         return {
-            "total_matches": total_matches,
-            "recent_matches_7_days": recent_matches,
+            "total_matches": total_count,
+            "recent_matches_7_days": recent_count,
             "bookmarked_matches": bookmarked_count,
-            "verdict_distribution": {verdict: count for verdict, count in verdict_stats},
+            "verdict_distribution": verdict_distribution,
             "score_statistics": {
-                "average_overall_score": round(score_stats.avg_score, 2) if score_stats.avg_score else 0,
-                "minimum_score": round(score_stats.min_score, 2) if score_stats.min_score else 0,
-                "maximum_score": round(score_stats.max_score, 2) if score_stats.max_score else 0,
-                "average_hard_score": round(score_stats.avg_hard_score, 2) if score_stats.avg_hard_score else 0,
-                "average_soft_score": round(score_stats.avg_soft_score, 2) if score_stats.avg_soft_score else 0
+                "average_overall_score": round(scores.get("avg_score") or 0, 2),
+                "minimum_score": round(scores.get("min_score") or 0, 2),
+                "maximum_score": round(scores.get("max_score") or 0, 2),
+                "average_hard_score": round(scores.get("avg_hard_score") or 0, 2),
+                "average_soft_score": round(scores.get("avg_soft_score") or 0, 2)
             },
             "performance_statistics": {
-                "average_processing_time_ms": round(performance_stats.avg_processing_time, 2) if performance_stats.avg_processing_time else 0,
-                "minimum_processing_time_ms": performance_stats.min_processing_time if performance_stats.min_processing_time else 0,
-                "maximum_processing_time_ms": performance_stats.max_processing_time if performance_stats.max_processing_time else 0
+                "average_processing_time_ms": round(performance.get("avg_processing_time") or 0, 2),
+                "minimum_processing_time_ms": performance.get("min_processing_time") or 0,
+                "maximum_processing_time_ms": performance.get("max_processing_time") or 0
             }
         }
     
-    def update_bookmark(self, db: Session, match_id: int, is_bookmarked: bool) -> Optional[MatchResult]:
+    async def update_bookmark(self, match_id: str, is_bookmarked: bool) -> Optional[MatchResult]:
         """Update bookmark status"""
-        match_result = self.get(db, match_id)
+        match_result = await MatchResult.get(match_id)
         if match_result:
             match_result.is_bookmarked = is_bookmarked
-            db.commit()
-            db.refresh(match_result)
+            await match_result.save()
         return match_result
     
-    def update_user_rating(self, db: Session, match_id: int, rating: int, notes: str = None) -> Optional[MatchResult]:
+    async def update_user_rating(self, match_id: str, rating: int, notes: str = None) -> Optional[MatchResult]:
         """Update user rating and notes"""
-        match_result = self.get(db, match_id)
+        match_result = await MatchResult.get(match_id)
         if match_result:
             match_result.user_rating = rating
             if notes:
                 match_result.user_notes = notes
-            db.commit()
-            db.refresh(match_result)
+            await match_result.save()
         return match_result
-    
-    # Async versions
-    async def get_best_matches_async(
-        self, 
-        db: AsyncSession, 
-        min_score: float = 70.0, 
-        skip: int = 0, 
-        limit: int = 100
-    ) -> List[MatchResult]:
-        """Get best match results above threshold (async)"""
-        from sqlalchemy import select
-        from sqlalchemy.orm import joinedload
-        result = await db.execute(
-            select(MatchResult)
-            .options(joinedload(MatchResult.resume), joinedload(MatchResult.job_description))
-            .where(MatchResult.overall_score >= min_score)
-            .order_by(desc(MatchResult.overall_score))
-            .offset(skip)
-            .limit(limit)
-        )
-        return result.scalars().all()
 
-# Global repository instance
-match_result_repository = MatchResultRepository()
+# Synchronous wrapper for backward compatibility
+class SyncMatchResultRepository(SyncRepository[MatchResult]):
+    """Synchronous MatchResult repository for backward compatibility"""
+    
+    def __init__(self):
+        super().__init__(MatchResult)
+        self.async_repo = MatchResultRepository()
+    
+    def get_by_resume_id(self, db, resume_id: str, skip: int = 0, limit: int = 100) -> List[MatchResult]:
+        """Synchronous get_by_resume_id"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.get_by_resume_id(resume_id, skip, limit))
+
+# Global repository instances
+match_result_repository = SyncMatchResultRepository()  # For backward compatibility
+async_match_result_repository = MatchResultRepository()  # For new async code

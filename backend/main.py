@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Request, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,15 +12,18 @@ from .services.parse_job import parse_job_description, parse_job_description_com
 from .utils.extract_entities import extract_emails, extract_phones
 
 # Import database components
-from .database import get_db, create_tables
+from .database.connection import init_database
 from .crud import (
-    resume_repository, 
-    job_description_repository, 
-    match_result_repository, 
+    async_resume_repository, 
+    async_job_description_repository, 
+    async_match_result_repository, 
+    async_audit_log_repository,
+    resume_repository,
+    job_description_repository,
+    match_result_repository,
     audit_log_repository
 )
 from .models import Resume, JobDescription, MatchResult, AuditLog
-from sqlalchemy.orm import Session
 
 app = FastAPI(title="Enhanced Resume & Job Matcher API", version="2.0.0")
 
@@ -35,19 +38,18 @@ app.add_middleware(
 )
 
 
-# Create database tables on startup
+# Initialize MongoDB on startup
 @app.on_event("startup")
 async def startup_event():
-    create_tables()
+    await init_database()
 
 # Helper function for audit logging
-def log_audit_event(
-    db: Session,
+async def log_audit_event(
     request: Request,
     event_type: str,
     event_action: str,
     resource_type: str = None,
-    resource_id: int = None,
+    resource_id: str = None,
     response_status: int = 200,
     response_time_ms: int = None,
     error_message: str = None,
@@ -55,8 +57,7 @@ def log_audit_event(
 ):
     """Helper function to log audit events"""
     try:
-        audit_log_repository.log_event(
-            db=db,
+        await async_audit_log_repository.log_event(
             event_type=event_type,
             event_action=event_action,
             resource_type=resource_type,
@@ -174,7 +175,7 @@ class ComprehensiveJobResult(BaseModel):
 
 # Resume Parser
 @app.post("/parse-resume", response_model=ParsedResume)
-async def parse_resume(file: UploadFile = File(...), request: Request = None, db: Session = Depends(get_db)):
+async def parse_resume(file: UploadFile = File(...), request: Request = None):
     """Extract text, emails, and phone numbers from uploaded resume file"""
     start_time = time.time()
     
@@ -198,8 +199,8 @@ async def parse_resume(file: UploadFile = File(...), request: Request = None, db
         }
         
         try:
-            db_resume = resume_repository.create(db, resume_data)
-            resume_id = db_resume.id
+            db_resume = await async_resume_repository.create(resume_data)
+            resume_id = str(db_resume.id)
         except Exception as db_error:
             print(f"Database error: {db_error}")
             resume_id = None
@@ -209,8 +210,7 @@ async def parse_resume(file: UploadFile = File(...), request: Request = None, db
         
         # Log audit event
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_parse",
             event_action="CREATE",
@@ -224,8 +224,7 @@ async def parse_resume(file: UploadFile = File(...), request: Request = None, db
         
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_parse",
             event_action="CREATE",
@@ -237,7 +236,7 @@ async def parse_resume(file: UploadFile = File(...), request: Request = None, db
 
 # Comprehensive Resume Parser
 @app.post("/parse-resume-comprehensive", response_model=ComprehensiveResumeResult)
-async def parse_resume_comprehensive_endpoint(file: UploadFile = File(...), request: Request = None, db: Session = Depends(get_db)):
+async def parse_resume_comprehensive_endpoint(file: UploadFile = File(...), request: Request = None):
     """
     Advanced resume parsing with complete entity extraction:
     - Personal info (name, contacts)
@@ -275,16 +274,15 @@ async def parse_resume_comprehensive_endpoint(file: UploadFile = File(...), requ
         }
         
         try:
-            db_resume = resume_repository.create(db, resume_data)
-            resume_id = db_resume.id
+            db_resume = await async_resume_repository.create(resume_data)
+            resume_id = str(db_resume.id)
         except Exception as db_error:
             print(f"Database error: {db_error}")
             resume_id = None
         
         # Log audit event
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_parse_comprehensive",
             event_action="CREATE",
@@ -298,8 +296,7 @@ async def parse_resume_comprehensive_endpoint(file: UploadFile = File(...), requ
         
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_parse_comprehensive",
             event_action="CREATE",
@@ -329,7 +326,7 @@ async def parse_job_comprehensive_endpoint(req: JobDescriptionRequest):
     return parse_job_description_comprehensive(req.text)
 
 @app.post("/match-resume-job", response_model=MatchResult)
-async def match_resume(req: MatchRequest, request: Request = None, db: Session = Depends(get_db)):
+async def match_resume(req: MatchRequest, request: Request = None):
     """
     Enhanced resume-job matching with configurable scoring weights.
     
@@ -371,8 +368,8 @@ async def match_resume(req: MatchRequest, request: Request = None, db: Session =
         
         try:
             if match_data["resume_id"] and match_data["job_description_id"]:
-                db_match = match_result_repository.create(db, match_data)
-                match_id = db_match.id
+                db_match = await async_match_result_repository.create(match_data)
+                match_id = str(db_match.id)
             else:
                 match_id = None
         except Exception as db_error:
@@ -381,8 +378,7 @@ async def match_resume(req: MatchRequest, request: Request = None, db: Session =
         
         # Log audit event
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_job_match",
             event_action="CREATE",
@@ -396,8 +392,7 @@ async def match_resume(req: MatchRequest, request: Request = None, db: Session =
         
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_job_match",
             event_action="CREATE",
@@ -419,7 +414,6 @@ async def match_resume_file(
     jd_skills: str = Form(""),  # Comma-separated skills
     hard_weight: float = Form(0.7),
     soft_weight: float = Form(0.3),
-    db: Session = Depends(get_db),
     request: Request = None
 ):
     """
@@ -457,8 +451,8 @@ async def match_resume_file(
                     "must_have_skills_count": len(skills_list),
                     "is_processed": True
                 }
-                db_job = job_description_repository.create(db, job_data)
-                job_description_id = db_job.id
+                db_job = await async_job_description_repository.create(job_data)
+                job_description_id = str(db_job.id)
                 print(f"DEBUG: Stored job description with ID: {job_description_id}")
             except Exception as job_error:
                 print(f"Job description storage error: {job_error}")
@@ -467,9 +461,9 @@ async def match_resume_file(
         resume_id = None
         try:
             # Check if resume with same filename already exists
-            existing_resume = resume_repository.get_by_filename(db, file.filename)
+            existing_resume = await async_resume_repository.get_by_filename(file.filename)
             if existing_resume:
-                resume_id = existing_resume.id
+                resume_id = str(existing_resume.id)
                 print(f"DEBUG: Found existing resume with ID: {resume_id}")
             else:
                 # Store new resume
@@ -485,8 +479,8 @@ async def match_resume_file(
                     "skills_count": len(result.get("extracted_resume_skills", [])),
                     "is_processed": True
                 }
-                db_resume = resume_repository.create(db, resume_data)
-                resume_id = db_resume.id
+                db_resume = await async_resume_repository.create(resume_data)
+                resume_id = str(db_resume.id)
                 print(f"DEBUG: Stored new resume with ID: {resume_id}")
         except Exception as resume_error:
             print(f"Resume storage error: {resume_error}")
@@ -521,14 +515,13 @@ async def match_resume_file(
                     "algorithm_version": "v2.0",
                     "confidence_level": convert_numpy_types(min(result.get("score", 0) / 100.0, 1.0))  # Convert percentage to 0-1
                 }
-                db_match = match_result_repository.create(db, match_data)
-                print(f"DEBUG: Stored match result with ID: {db_match.id}")
+                db_match = await async_match_result_repository.create(match_data)
+                print(f"DEBUG: Stored match result with ID: {str(db_match.id)}")
             except Exception as match_error:
                 print(f"Match result storage error: {match_error}")
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="match_analysis",
             event_action="CREATE",
@@ -542,8 +535,7 @@ async def match_resume_file(
         }
         
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="match_analysis",
             event_action="CREATE",
@@ -558,45 +550,27 @@ async def match_resume_file(
 async def get_resumes(
     skip: int = 0, 
     limit: int = 100, 
-    db: Session = Depends(get_db),
     request: Request = None
 ):
     """Get stored resumes with pagination"""
     try:
-        resumes = resume_repository.get_multi(db, skip=skip, limit=limit)
+        resumes = await async_resume_repository.get_multi(skip=skip, limit=limit)
         
-        # Convert SQLAlchemy objects to dictionaries
+        # Convert Beanie documents to dictionaries
         resume_dicts = []
         for resume in resumes:
-            resume_dict = {
-                "id": resume.id,
-                "filename": resume.filename,
-                "file_size": resume.file_size,
-                "file_type": resume.file_type,
-                "candidate_name": resume.candidate_name,
-                "emails": resume.emails,
-                "phones": resume.phones,
-                "skills": resume.skills,
-                "experience_years": resume.experience_years,
-                "certifications": resume.certifications,
-                "education": resume.education,
-                "sections": resume.sections,
-                "total_characters": resume.total_characters,
-                "total_words": resume.total_words,
-                "total_lines": resume.total_lines,
-                "skills_count": resume.skills_count,
-                "education_count": resume.education_count,
-                "certifications_count": resume.certifications_count,
-                "is_processed": resume.is_processed,
-                "processing_error": resume.processing_error,
-                "created_at": resume.created_at.isoformat() if resume.created_at else None,
-                "updated_at": resume.updated_at.isoformat() if resume.updated_at else None
-            }
+            resume_dict = resume.dict()
+            # Convert ObjectId to string for JSON serialization
+            resume_dict["id"] = str(resume.id)
+            # Convert datetime to ISO string
+            if resume_dict.get("created_at"):
+                resume_dict["created_at"] = resume.created_at.isoformat()
+            if resume_dict.get("updated_at"):
+                resume_dict["updated_at"] = resume.updated_at.isoformat()
             resume_dicts.append(resume_dict)
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_list",
             event_action="VIEW",
@@ -604,15 +578,16 @@ async def get_resumes(
             business_event=f"Retrieved {len(resumes)} resumes"
         )
         
+        total_count = await async_resume_repository.count()
+        
         return {
             "resumes": resume_dicts,
-            "total": resume_repository.count(db),
+            "total": total_count,
             "skip": skip,
             "limit": limit
         }
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_list",
             event_action="VIEW",
@@ -622,14 +597,14 @@ async def get_resumes(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/debug/resumes")
-async def debug_resumes(db: Session = Depends(get_db)):
+async def debug_resumes():
     """Debug endpoint to check raw resume data"""
     try:
-        resumes = db.query(Resume).limit(5).all()
+        resumes = await async_resume_repository.get_multi(limit=5)
         debug_data = []
         for resume in resumes:
             debug_data.append({
-                "id": resume.id,
+                "id": str(resume.id),
                 "filename": resume.filename,
                 "candidate_name": resume.candidate_name,
                 "file_size": resume.file_size,
@@ -730,19 +705,17 @@ async def debug_extract_skills(text: str):
 
 @app.get("/resumes/{resume_id}")
 async def get_resume(
-    resume_id: int, 
-    db: Session = Depends(get_db),
+    resume_id: str, 
     request: Request = None
 ):
     """Get a specific resume by ID"""
     try:
-        resume = resume_repository.get(db, resume_id)
+        resume = await async_resume_repository.get(resume_id)
         if not resume:
             raise HTTPException(status_code=404, detail="Resume not found")
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_view",
             event_action="VIEW",
@@ -755,8 +728,7 @@ async def get_resume(
     except HTTPException:
         raise
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="resume_view",
             event_action="VIEW",
@@ -770,21 +742,20 @@ async def get_jobs(
     skip: int = 0, 
     limit: int = 100,
     active_only: bool = True,
-    db: Session = Depends(get_db),
     request: Request = None
 ):
     """Get stored job descriptions with pagination"""
     try:
         if active_only:
-            jobs = job_description_repository.get_active_jobs(db, skip=skip, limit=limit)
+            jobs = await async_job_description_repository.get_active_jobs(skip=skip, limit=limit)
         else:
-            jobs = job_description_repository.get_multi(db, skip=skip, limit=limit)
+            jobs = await async_job_description_repository.get_multi(skip=skip, limit=limit)
         
-        # Convert SQLAlchemy objects to dictionaries
+        # Convert Document objects to dictionaries
         job_dicts = []
         for job in jobs:
             job_dict = {
-                "id": job.id,
+                "id": str(job.id),
                 "title": job.title,
                 "company": job.company,
                 "location": job.location,
@@ -807,8 +778,7 @@ async def get_jobs(
             job_dicts.append(job_dict)
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="job_list",
             event_action="VIEW",
@@ -818,13 +788,12 @@ async def get_jobs(
         
         return {
             "jobs": job_dicts,
-            "total": job_description_repository.count(db, is_active=True) if active_only else job_description_repository.count(db),
+            "total": await async_job_description_repository.count_active() if active_only else await async_job_description_repository.count(),
             "skip": skip,
             "limit": limit
         }
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="job_list",
             event_action="VIEW",
@@ -838,23 +807,22 @@ async def get_matches(
     skip: int = 0, 
     limit: int = 100,
     min_score: float = 0.0,
-    db: Session = Depends(get_db),
     request: Request = None
 ):
     """Get stored match results with pagination"""
     try:
         if min_score > 0:
-            matches = match_result_repository.get_best_matches(db, min_score=min_score, skip=skip, limit=limit)
+            matches = await async_match_result_repository.get_best_matches(min_score=min_score, skip=skip, limit=limit)
         else:
-            matches = match_result_repository.get_multi(db, skip=skip, limit=limit)
+            matches = await async_match_result_repository.get_multi(skip=skip, limit=limit)
         
-        # Convert SQLAlchemy objects to dictionaries
+        # Convert Document objects to dictionaries
         match_dicts = []
         for match in matches:
             match_dict = {
-                "id": match.id,
-                "resume_id": match.resume_id,
-                "job_description_id": match.job_description_id,
+                "id": str(match.id),
+                "resume_id": str(match.resume_id),
+                "job_description_id": str(match.job_description_id),
                 "overall_score": match.overall_score,
                 "hard_score": match.hard_score,
                 "soft_score": match.soft_score,
@@ -877,8 +845,7 @@ async def get_matches(
             match_dicts.append(match_dict)
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="match_list",
             event_action="VIEW",
@@ -888,13 +855,12 @@ async def get_matches(
         
         return {
             "matches": match_dicts,
-            "total": match_result_repository.count(db),
+            "total": await async_match_result_repository.count(),
             "skip": skip,
             "limit": limit
         }
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="match_list",
             event_action="VIEW",
@@ -904,17 +870,16 @@ async def get_matches(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/statistics")
-async def get_statistics(db: Session = Depends(get_db), request: Request = None):
+async def get_statistics(request: Request = None):
     """Get comprehensive system statistics"""
     try:
-        resume_stats = resume_repository.get_statistics(db)
-        job_stats = job_description_repository.get_statistics(db)
-        match_stats = match_result_repository.get_statistics(db)
-        audit_stats = audit_log_repository.get_statistics(db)
+        resume_stats = await async_resume_repository.get_statistics()
+        job_stats = await async_job_description_repository.get_statistics()
+        match_stats = await async_match_result_repository.get_statistics()
+        audit_stats = await async_audit_log_repository.get_statistics()
         
         # Log audit event
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="statistics_view",
             event_action="VIEW",
@@ -928,8 +893,7 @@ async def get_statistics(db: Session = Depends(get_db), request: Request = None)
             "audit": audit_stats
         }
     except Exception as e:
-        log_audit_event(
-            db=db,
+        await log_audit_event(
             request=request,
             event_type="statistics_view",
             event_action="VIEW",
@@ -943,19 +907,18 @@ async def get_audit_logs(
     skip: int = 0, 
     limit: int = 100,
     event_type: Optional[str] = None,
-    db: Session = Depends(get_db),
     request: Request = None
 ):
     """Get audit logs with optional filtering"""
     try:
         if event_type:
-            logs = audit_log_repository.get_by_event_type(db, event_type, skip=skip, limit=limit)
+            logs = await async_audit_log_repository.get_by_event_type(event_type, skip=skip, limit=limit)
         else:
-            logs = audit_log_repository.get_multi(db, skip=skip, limit=limit)
+            logs = await async_audit_log_repository.get_multi(skip=skip, limit=limit)
         
         return {
             "logs": logs,
-            "total": audit_log_repository.count(db),
+            "total": await async_audit_log_repository.count(),
             "skip": skip,
             "limit": limit
         }
@@ -973,7 +936,7 @@ def root():
             "Configurable hard/soft scoring weights", 
             "Gap-focused actionable feedback",
             "File upload support",
-            "PostgreSQL database storage",
+            "MongoDB database storage",
             "Comprehensive audit logging",
             "Statistical analytics"
         ],

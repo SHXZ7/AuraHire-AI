@@ -1,143 +1,110 @@
 # backend/crud/resume.py
 
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, and_, or_
-from .base import BaseRepository
+from .base import BaseRepository, SyncRepository
 from ..models.resume import Resume
 
 class ResumeRepository(BaseRepository[Resume]):
-    """Repository for Resume operations"""
+    """Repository for Resume operations with MongoDB"""
     
     def __init__(self):
         super().__init__(Resume)
     
-    def get_by_filename(self, db: Session, filename: str) -> Optional[Resume]:
+    async def get_by_filename(self, filename: str) -> Optional[Resume]:
         """Get resume by filename"""
-        return db.query(Resume).filter(Resume.filename == filename).first()
+        return await Resume.find_one(Resume.filename == filename)
     
-    def search_by_skills(self, db: Session, skills: List[str], skip: int = 0, limit: int = 100) -> List[Resume]:
+    async def search_by_skills(self, skills: List[str], skip: int = 0, limit: int = 100) -> List[Resume]:
         """Search resumes by skills"""
-        # Use JSON contains operations for PostgreSQL
-        filters = []
-        for skill in skills:
-            filters.append(Resume.skills.op('?')(skill))
-        
-        return (
-            db.query(Resume)
-            .filter(or_(*filters))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        # MongoDB query to find resumes that contain any of the specified skills
+        query = {"skills": {"$in": skills}}
+        return await Resume.find(query).skip(skip).limit(limit).to_list()
     
-    def search_by_name(self, db: Session, name_pattern: str, skip: int = 0, limit: int = 100) -> List[Resume]:
+    async def search_by_name(self, name_pattern: str, skip: int = 0, limit: int = 100) -> List[Resume]:
         """Search resumes by candidate name"""
-        return (
-            db.query(Resume)
-            .filter(Resume.candidate_name.ilike(f"%{name_pattern}%"))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        # Case-insensitive regex search
+        query = {"candidate_name": {"$regex": name_pattern, "$options": "i"}}
+        return await Resume.find(query).skip(skip).limit(limit).to_list()
     
-    def get_by_experience_range(
+    async def get_by_experience_range(
         self, 
-        db: Session, 
         min_years: int, 
         max_years: int, 
         skip: int = 0, 
         limit: int = 100
     ) -> List[Resume]:
         """Get resumes by experience range"""
-        return (
-            db.query(Resume)
-            .filter(
-                and_(
-                    Resume.experience_years >= min_years,
-                    Resume.experience_years <= max_years
-                )
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_processed_resumes(self, db: Session, skip: int = 0, limit: int = 100) -> List[Resume]:
-        """Get successfully processed resumes"""
-        return (
-            db.query(Resume)
-            .filter(Resume.is_processed == True)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_failed_resumes(self, db: Session, skip: int = 0, limit: int = 100) -> List[Resume]:
-        """Get resumes with processing errors"""
-        return (
-            db.query(Resume)
-            .filter(Resume.processing_error.isnot(None))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_statistics(self, db: Session) -> Dict[str, Any]:
-        """Get resume collection statistics"""
-        total_resumes = db.query(Resume).count()
-        processed_resumes = db.query(Resume).filter(Resume.is_processed == True).count()
-        failed_resumes = db.query(Resume).filter(Resume.processing_error.isnot(None)).count()
-        
-        # Average statistics
-        avg_stats = db.query(
-            func.avg(Resume.experience_years).label('avg_experience'),
-            func.avg(Resume.skills_count).label('avg_skills'),
-            func.avg(Resume.total_words).label('avg_words')
-        ).first()
-        
-        return {
-            "total_resumes": total_resumes,
-            "processed_resumes": processed_resumes,
-            "failed_resumes": failed_resumes,
-            "processing_success_rate": round((processed_resumes / total_resumes * 100), 2) if total_resumes > 0 else 0,
-            "average_experience_years": round(avg_stats.avg_experience, 1) if avg_stats.avg_experience else 0,
-            "average_skills_count": round(avg_stats.avg_skills, 1) if avg_stats.avg_skills else 0,
-            "average_word_count": round(avg_stats.avg_words, 1) if avg_stats.avg_words else 0
+        query = {
+            "experience_years": {
+                "$gte": min_years,
+                "$lte": max_years
+            }
         }
+        return await Resume.find(query).skip(skip).limit(limit).to_list()
     
-    def get_skill_frequency(self, db: Session, top_n: int = 20) -> List[Dict[str, Any]]:
-        """Get most common skills across all resumes"""
-        # This would require more complex JSON operations
-        # For now, return empty list - can be implemented later with raw SQL
-        return []
+    async def get_processed_resumes(self, skip: int = 0, limit: int = 100) -> List[Resume]:
+        """Get successfully processed resumes"""
+        return await Resume.find(Resume.is_processed == True).skip(skip).limit(limit).to_list()
     
-    # Async versions
-    async def get_by_filename_async(self, db: AsyncSession, filename: str) -> Optional[Resume]:
-        """Get resume by filename (async)"""
-        from sqlalchemy import select
-        result = await db.execute(select(Resume).where(Resume.filename == filename))
-        return result.scalar_one_or_none()
+    async def get_failed_resumes(self, skip: int = 0, limit: int = 100) -> List[Resume]:
+        """Get resumes with processing errors"""
+        query = {"processing_error": {"$ne": None}}
+        return await Resume.find(query).skip(skip).limit(limit).to_list()
     
-    async def get_statistics_async(self, db: AsyncSession) -> Dict[str, Any]:
-        """Get resume collection statistics (async)"""
-        from sqlalchemy import select, func
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Get resume statistics"""
+        total_count = await Resume.count()
         
-        # Simplified version for async
-        total_result = await db.execute(select(func.count(Resume.id)))
-        total_resumes = total_result.scalar()
+        # Use find().count() method properly for filters
+        processed_query = Resume.find(Resume.is_processed == True)
+        processed_count = await processed_query.count()
         
-        processed_result = await db.execute(
-            select(func.count(Resume.id)).where(Resume.is_processed == True)
-        )
-        processed_resumes = processed_result.scalar()
+        failed_query = Resume.find({"processing_error": {"$ne": None}})
+        failed_count = await failed_query.count()
+        
+        # Average statistics for processed resumes
+        pipeline = [
+            {"$match": {"is_processed": True}},
+            {"$group": {
+                "_id": None,
+                "avg_skills": {"$avg": "$skills_count"},
+                "avg_experience": {"$avg": "$experience_years"},
+                "avg_words": {"$avg": "$total_words"}
+            }}
+        ]
+        
+        avg_stats = await Resume.aggregate(pipeline).to_list(1)
+        averages = avg_stats[0] if avg_stats else {}
         
         return {
-            "total_resumes": total_resumes,
-            "processed_resumes": processed_resumes,
-            "processing_success_rate": round((processed_resumes / total_resumes * 100), 2) if total_resumes > 0 else 0
+            "total_resumes": total_count,
+            "processed_resumes": processed_count,
+            "failed_resumes": failed_count,
+            "success_rate": round((processed_count / total_count * 100), 2) if total_count > 0 else 0,
+            "average_skills_count": round(averages.get("avg_skills") or 0, 1),
+            "average_experience_years": round(averages.get("avg_experience") or 0, 1),
+            "average_word_count": round(averages.get("avg_words") or 0, 1)
         }
 
-# Global repository instance
-resume_repository = ResumeRepository()
+# Synchronous wrapper for backward compatibility
+class SyncResumeRepository(SyncRepository[Resume]):
+    """Synchronous Resume repository for backward compatibility"""
+    
+    def __init__(self):
+        super().__init__(Resume)
+        self.async_repo = ResumeRepository()
+    
+    def get_by_filename(self, db, filename: str) -> Optional[Resume]:
+        """Synchronous get_by_filename"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.get_by_filename(filename))
+
+# Global repository instances
+resume_repository = SyncResumeRepository()  # For backward compatibility
+async_resume_repository = ResumeRepository()  # For new async code

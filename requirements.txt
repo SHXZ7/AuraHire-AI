@@ -18,10 +18,9 @@ numpy
 streamlit
 requests
 
-# Database dependencies (PostgreSQL only)
-psycopg2-binary 
-sqlalchemy
-alembic
-asyncpg
+# MongoDB dependencies
+pymongo
+motor
+beanie
 python-dotenv
 python-multipart 

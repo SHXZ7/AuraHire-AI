@@ -1,137 +1,181 @@
 # backend/crud/base.py
 
 from typing import Type, TypeVar, Generic, List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc, asc
-from ..models.base import BaseModel
+from bson import ObjectId
+from beanie import Document
 
-ModelType = TypeVar("ModelType", bound=BaseModel)
+ModelType = TypeVar("ModelType", bound=Document)
 
 class BaseRepository(Generic[ModelType]):
-    """Base repository with common CRUD operations"""
+    """Base repository with common CRUD operations for MongoDB with Beanie"""
     
     def __init__(self, model: Type[ModelType]):
         self.model = model
     
-    # Synchronous operations
-    def create(self, db: Session, obj_in: Dict[str, Any]) -> ModelType:
+    # Create operations
+    async def create(self, obj_in: Dict[str, Any]) -> ModelType:
         """Create a new record"""
         db_obj = self.model(**obj_in)
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db_obj.save()
         return db_obj
     
-    def get(self, db: Session, id: int) -> Optional[ModelType]:
+    # Read operations
+    async def get(self, id: str) -> Optional[ModelType]:
         """Get a record by ID"""
-        return db.query(self.model).filter(self.model.id == id).first()
+        try:
+            return await self.model.get(ObjectId(id))
+        except:
+            return None
+    
+    async def get_multi(
+        self, 
+        skip: int = 0, 
+        limit: int = 100,
+        sort_field: str = "created_at",
+        sort_direction: int = -1  # -1 for descending, 1 for ascending
+    ) -> List[ModelType]:
+        """Get multiple records with pagination"""
+        sort_criteria = [(sort_field, sort_direction)]
+        return await self.model.find_all().sort(sort_criteria).skip(skip).limit(limit).to_list()
+    
+    async def count(self) -> int:
+        """Count total records"""
+        return await self.model.count()
+    
+    # Update operations
+    async def update(self, id: str, obj_in: Dict[str, Any]) -> Optional[ModelType]:
+        """Update a record by ID"""
+        db_obj = await self.get(id)
+        if db_obj:
+            for field, value in obj_in.items():
+                if hasattr(db_obj, field):
+                    setattr(db_obj, field, value)
+            await db_obj.save()
+        return db_obj
+    
+    # Delete operations
+    async def delete(self, id: str) -> bool:
+        """Delete a record by ID"""
+        db_obj = await self.get(id)
+        if db_obj:
+            await db_obj.delete()
+            return True
+        return False
+    
+    # Search operations
+    async def find_by_field(
+        self, 
+        field: str, 
+        value: Any, 
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[ModelType]:
+        """Find records by a specific field value"""
+        query = {field: value}
+        return await self.model.find(query).skip(skip).limit(limit).to_list()
+    
+    async def search(
+        self, 
+        filters: Dict[str, Any], 
+        skip: int = 0, 
+        limit: int = 100,
+        sort_field: str = "created_at",
+        sort_direction: int = -1
+    ) -> List[ModelType]:
+        """Search records with multiple filters"""
+        sort_criteria = [(sort_field, sort_direction)]
+        return await self.model.find(filters).sort(sort_criteria).skip(skip).limit(limit).to_list()
+
+# Synchronous compatibility functions for non-async contexts
+class SyncRepository(Generic[ModelType]):
+    """Synchronous wrapper for compatibility with existing code"""
+    
+    def __init__(self, model: Type[ModelType]):
+        self.model = model
+        self.async_repo = BaseRepository(model)
+    
+    def create(self, db, obj_in: Dict[str, Any]) -> ModelType:
+        """Synchronous create - use with caution, prefer async"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.create(obj_in))
+    
+    def get_multi(self, db, skip: int = 0, limit: int = 100) -> List[ModelType]:
+        """Synchronous get_multi - use with caution, prefer async"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.get_multi(skip, limit))
+    
+    def count(self, db) -> int:
+        """Synchronous count - use with caution, prefer async"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.count())
     
     def get_multi(
         self, 
-        db: Session, 
+        db, 
         skip: int = 0, 
         limit: int = 100,
         order_by: str = "created_at",
         order_desc: bool = True
     ) -> List[ModelType]:
         """Get multiple records with pagination"""
-        query = db.query(self.model)
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        # Apply ordering
-        if hasattr(self.model, order_by):
-            order_column = getattr(self.model, order_by)
-            if order_desc:
-                query = query.order_by(desc(order_column))
-            else:
-                query = query.order_by(asc(order_column))
-        
-        return query.offset(skip).limit(limit).all()
+        return loop.run_until_complete(self.async_repo.get_multi(skip=skip, limit=limit))
     
-    def update(self, db: Session, db_obj: ModelType, obj_in: Dict[str, Any]) -> ModelType:
+    def update(self, db, db_obj: ModelType, obj_in: Dict[str, Any]) -> ModelType:
         """Update a record"""
-        for field, value in obj_in.items():
-            if hasattr(db_obj, field):
-                setattr(db_obj, field, value)
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        # Convert to string ID if it's an ObjectId
+        obj_id = str(db_obj.id) if hasattr(db_obj, 'id') else None
+        return loop.run_until_complete(self.async_repo.update(obj_id, obj_in))
     
-    def delete(self, db: Session, id: int) -> Optional[ModelType]:
+    def delete(self, db, id: str) -> Optional[ModelType]:
         """Delete a record by ID"""
-        obj = db.query(self.model).filter(self.model.id == id).first()
-        if obj:
-            db.delete(obj)
-            db.commit()
-        return obj
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.delete(id))
     
-    def count(self, db: Session, **filters) -> int:
+    def count(self, db, **filters) -> int:
         """Count records with optional filters"""
-        query = db.query(self.model)
-        for field, value in filters.items():
-            if hasattr(self.model, field):
-                query = query.filter(getattr(self.model, field) == value)
-        return query.count()
-    
-    # Async operations
-    async def create_async(self, db: AsyncSession, obj_in: Dict[str, Any]) -> ModelType:
-        """Create a new record (async)"""
-        db_obj = self.model(**obj_in)
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
-    
-    async def get_async(self, db: AsyncSession, id: int) -> Optional[ModelType]:
-        """Get a record by ID (async)"""
-        from sqlalchemy import select
-        result = await db.execute(select(self.model).where(self.model.id == id))
-        return result.scalar_one_or_none()
-    
-    async def get_multi_async(
-        self, 
-        db: AsyncSession, 
-        skip: int = 0, 
-        limit: int = 100,
-        order_by: str = "created_at",
-        order_desc: bool = True
-    ) -> List[ModelType]:
-        """Get multiple records with pagination (async)"""
-        from sqlalchemy import select, desc, asc
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
-        query = select(self.model)
-        
-        # Apply ordering
-        if hasattr(self.model, order_by):
-            order_column = getattr(self.model, order_by)
-            if order_desc:
-                query = query.order_by(desc(order_column))
-            else:
-                query = query.order_by(asc(order_column))
-        
-        query = query.offset(skip).limit(limit)
-        result = await db.execute(query)
-        return result.scalars().all()
-    
-    async def update_async(self, db: AsyncSession, db_obj: ModelType, obj_in: Dict[str, Any]) -> ModelType:
-        """Update a record (async)"""
-        for field, value in obj_in.items():
-            if hasattr(db_obj, field):
-                setattr(db_obj, field, value)
-        
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
-    
-    async def delete_async(self, db: AsyncSession, id: int) -> Optional[ModelType]:
-        """Delete a record by ID (async)"""
-        from sqlalchemy import select
-        result = await db.execute(select(self.model).where(self.model.id == id))
-        obj = result.scalar_one_or_none()
-        if obj:
-            await db.delete(obj)
-            await db.commit()
-        return obj
+        return loop.run_until_complete(self.async_repo.count())

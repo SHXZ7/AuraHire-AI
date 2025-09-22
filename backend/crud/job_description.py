@@ -1,195 +1,147 @@
 # backend/crud/job_description.py
 
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, and_, or_
-from .base import BaseRepository
+from .base import BaseRepository, SyncRepository
 from ..models.job_description import JobDescription
 
 class JobDescriptionRepository(BaseRepository[JobDescription]):
-    """Repository for Job Description operations"""
+    """Repository for Job Description operations with MongoDB"""
     
     def __init__(self):
         super().__init__(JobDescription)
     
-    def search_by_title(self, db: Session, title_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+    async def search_by_title(self, title_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
         """Search job descriptions by title"""
-        return (
-            db.query(JobDescription)
-            .filter(
-                or_(
-                    JobDescription.title.ilike(f"%{title_pattern}%"),
-                    JobDescription.role.ilike(f"%{title_pattern}%")
-                )
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def search_by_company(self, db: Session, company_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Search job descriptions by company"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.company.ilike(f"%{company_pattern}%"))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def search_by_location(self, db: Session, location_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Search job descriptions by location"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.location.ilike(f"%{location_pattern}%"))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def search_by_skills(self, db: Session, skills: List[str], skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Search job descriptions by required skills"""
-        filters = []
-        for skill in skills:
-            # Search in both must_have and nice_to_have skills
-            filters.append(
-                or_(
-                    JobDescription.must_have_skills.op('?')(skill),
-                    JobDescription.nice_to_have_skills.op('?')(skill)
-                )
-            )
-        
-        return (
-            db.query(JobDescription)
-            .filter(or_(*filters))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_active_jobs(self, db: Session, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Get active job descriptions"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.is_active == True)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_by_industry(self, db: Session, industry: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Get job descriptions by industry"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.industry.ilike(f"%{industry}%"))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_processed_jobs(self, db: Session, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Get successfully processed job descriptions"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.is_processed == True)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_failed_jobs(self, db: Session, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Get job descriptions with processing errors"""
-        return (
-            db.query(JobDescription)
-            .filter(JobDescription.processing_error.isnot(None))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
-    def get_statistics(self, db: Session) -> Dict[str, Any]:
-        """Get job description collection statistics"""
-        total_jobs = db.query(JobDescription).count()
-        active_jobs = db.query(JobDescription).filter(JobDescription.is_active == True).count()
-        processed_jobs = db.query(JobDescription).filter(JobDescription.is_processed == True).count()
-        failed_jobs = db.query(JobDescription).filter(JobDescription.processing_error.isnot(None)).count()
-        
-        # Average statistics
-        avg_stats = db.query(
-            func.avg(JobDescription.must_have_skills_count).label('avg_must_have'),
-            func.avg(JobDescription.nice_to_have_skills_count).label('avg_nice_to_have'),
-            func.avg(JobDescription.total_words).label('avg_words')
-        ).first()
-        
-        # Top companies and locations
-        top_companies = (
-            db.query(JobDescription.company, func.count(JobDescription.id).label('count'))
-            .filter(JobDescription.company.isnot(None))
-            .group_by(JobDescription.company)
-            .order_by(func.count(JobDescription.id).desc())
-            .limit(5)
-            .all()
-        )
-        
-        top_locations = (
-            db.query(JobDescription.location, func.count(JobDescription.id).label('count'))
-            .filter(JobDescription.location.isnot(None))
-            .group_by(JobDescription.location)
-            .order_by(func.count(JobDescription.id).desc())
-            .limit(5)
-            .all()
-        )
-        
-        return {
-            "total_jobs": total_jobs,
-            "active_jobs": active_jobs,
-            "processed_jobs": processed_jobs,
-            "failed_jobs": failed_jobs,
-            "processing_success_rate": round((processed_jobs / total_jobs * 100), 2) if total_jobs > 0 else 0,
-            "average_must_have_skills": round(avg_stats.avg_must_have, 1) if avg_stats.avg_must_have else 0,
-            "average_nice_to_have_skills": round(avg_stats.avg_nice_to_have, 1) if avg_stats.avg_nice_to_have else 0,
-            "average_word_count": round(avg_stats.avg_words, 1) if avg_stats.avg_words else 0,
-            "top_companies": [{"company": company, "count": count} for company, count in top_companies],
-            "top_locations": [{"location": location, "count": count} for location, count in top_locations]
+        query = {
+            "$or": [
+                {"title": {"$regex": title_pattern, "$options": "i"}},
+                {"role": {"$regex": title_pattern, "$options": "i"}}
+            ]
         }
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
     
-    def get_skill_demand(self, db: Session, top_n: int = 20) -> List[Dict[str, Any]]:
-        """Get most in-demand skills across all job descriptions"""
-        # This would require complex JSON operations
-        # For now, return empty list - can be implemented later with raw SQL
-        return []
+    async def search_by_company(self, company_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Search job descriptions by company"""
+        query = {"company": {"$regex": company_pattern, "$options": "i"}}
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
     
-    # Async versions
-    async def get_active_jobs_async(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[JobDescription]:
-        """Get active job descriptions (async)"""
-        from sqlalchemy import select
-        result = await db.execute(
-            select(JobDescription)
-            .where(JobDescription.is_active == True)
-            .offset(skip)
-            .limit(limit)
-        )
-        return result.scalars().all()
+    async def search_by_location(self, location_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Search job descriptions by location"""
+        query = {"location": {"$regex": location_pattern, "$options": "i"}}
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
     
-    async def get_statistics_async(self, db: AsyncSession) -> Dict[str, Any]:
-        """Get job description collection statistics (async)"""
-        from sqlalchemy import select, func
+    async def search_by_skills(self, skills: List[str], skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Search job descriptions by required skills"""
+        query = {
+            "$or": [
+                {"must_have_skills": {"$in": skills}},
+                {"nice_to_have_skills": {"$in": skills}}
+            ]
+        }
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
+    
+    async def get_active_jobs(self, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Get active job descriptions"""
+        return await JobDescription.find(JobDescription.is_active == True).skip(skip).limit(limit).to_list()
+    
+    async def get_by_industry(self, industry: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Get job descriptions by industry"""
+        query = {"industry": {"$regex": industry, "$options": "i"}}
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
+    
+    async def get_processed_jobs(self, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Get successfully processed job descriptions"""
+        return await JobDescription.find(JobDescription.is_processed == True).skip(skip).limit(limit).to_list()
+    
+    async def get_failed_jobs(self, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Get job descriptions with processing errors"""
+        query = {"processing_error": {"$ne": None}}
+        return await JobDescription.find(query).skip(skip).limit(limit).to_list()
+    
+    async def count_active(self) -> int:
+        """Count active job descriptions"""
+        active_query = JobDescription.find(JobDescription.is_active == True)
+        return await active_query.count()
+
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Get job description statistics"""
+        total_count = await JobDescription.count()
         
-        # Simplified version for async
-        total_result = await db.execute(select(func.count(JobDescription.id)))
-        total_jobs = total_result.scalar()
+        # Use find().count() method properly for filters
+        active_query = JobDescription.find(JobDescription.is_active == True)
+        active_count = await active_query.count()
         
-        active_result = await db.execute(
-            select(func.count(JobDescription.id)).where(JobDescription.is_active == True)
-        )
-        active_jobs = active_result.scalar()
+        processed_query = JobDescription.find(JobDescription.is_processed == True)
+        processed_count = await processed_query.count()
+        
+        failed_query = JobDescription.find({"processing_error": {"$ne": None}})
+        failed_count = await failed_query.count()
+        
+        # Average statistics for processed jobs
+        pipeline = [
+            {"$match": {"is_processed": True}},
+            {"$group": {
+                "_id": None,
+                "avg_must_have": {"$avg": "$must_have_skills_count"},
+                "avg_nice_to_have": {"$avg": "$nice_to_have_skills_count"},
+                "avg_words": {"$avg": "$total_words"}
+            }}
+        ]
+        
+        avg_stats = await JobDescription.aggregate(pipeline).to_list(1)
+        averages = avg_stats[0] if avg_stats else {}
+        
+        # Top companies
+        company_pipeline = [
+            {"$match": {"company": {"$ne": None}}},
+            {"$group": {"_id": "$company", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+        top_companies = await JobDescription.aggregate(company_pipeline).to_list(5)
+        
+        # Top locations
+        location_pipeline = [
+            {"$match": {"location": {"$ne": None}}},
+            {"$group": {"_id": "$location", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+        top_locations = await JobDescription.aggregate(location_pipeline).to_list(5)
         
         return {
-            "total_jobs": total_jobs,
-            "active_jobs": active_jobs,
-            "activity_rate": round((active_jobs / total_jobs * 100), 2) if total_jobs > 0 else 0
+            "total_jobs": total_count,
+            "active_jobs": active_count,
+            "processed_jobs": processed_count,
+            "failed_jobs": failed_count,
+            "processing_success_rate": round((processed_count / total_count * 100), 2) if total_count > 0 else 0,
+            "activity_rate": round((active_count / total_count * 100), 2) if total_count > 0 else 0,
+            "average_must_have_skills": round(averages.get("avg_must_have") or 0, 1),
+            "average_nice_to_have_skills": round(averages.get("avg_nice_to_have") or 0, 1),
+            "average_word_count": round(averages.get("avg_words") or 0, 1),
+            "top_companies": [{"company": item["_id"], "count": item["count"]} for item in top_companies],
+            "top_locations": [{"location": item["_id"], "count": item["count"]} for item in top_locations]
         }
 
-# Global repository instance
-job_description_repository = JobDescriptionRepository()
+# Synchronous wrapper for backward compatibility
+class SyncJobDescriptionRepository(SyncRepository[JobDescription]):
+    """Synchronous JobDescription repository for backward compatibility"""
+    
+    def __init__(self):
+        super().__init__(JobDescription)
+        self.async_repo = JobDescriptionRepository()
+    
+    def search_by_title(self, db, title_pattern: str, skip: int = 0, limit: int = 100) -> List[JobDescription]:
+        """Synchronous search_by_title"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.async_repo.search_by_title(title_pattern, skip, limit))
+
+# Global repository instances
+job_description_repository = SyncJobDescriptionRepository()  # For backward compatibility
+async_job_description_repository = JobDescriptionRepository()  # For new async code

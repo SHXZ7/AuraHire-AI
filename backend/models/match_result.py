@@ -1,55 +1,62 @@
 # backend/models/match_result.py
 
-from sqlalchemy import Column, String, Text, JSON, Integer, Float, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
+from typing import List, Optional
+from pydantic import Field
+from bson import ObjectId
 from .base import BaseModel
 
 class MatchResult(BaseModel):
-    """Match Result model for storing resume-job matching results"""
-    __tablename__ = "match_results"
+    """Match Result model for storing resume-job matching results in MongoDB"""
     
-    # Foreign keys
-    resume_id = Column(Integer, ForeignKey("resumes.id"), nullable=False)
-    job_description_id = Column(Integer, ForeignKey("job_descriptions.id"), nullable=False)
-    
-    # Relationships
-    resume = relationship("Resume", backref="match_results")
-    job_description = relationship("JobDescription", backref="match_results")
+    # Foreign keys (ObjectId references)
+    resume_id: ObjectId = Field(..., index=True)
+    job_description_id: ObjectId = Field(..., index=True)
     
     # Matching scores
-    overall_score = Column(Float, nullable=False)  # Final weighted score
-    hard_score = Column(Float, nullable=False)     # Skill match percentage
-    soft_score = Column(Float, nullable=False)     # Semantic similarity score
-    verdict = Column(String(50), nullable=False)   # High, Medium, Low
+    overall_score: float = Field(..., index=True)  # Final weighted score
+    hard_score: float = Field(...)     # Skill match percentage
+    soft_score: float = Field(...)     # Semantic similarity score
+    verdict: str = Field(..., index=True)   # High, Medium, Low
     
     # Scoring configuration
-    hard_weight = Column(Float, default=0.7)       # Weight for hard skills
-    soft_weight = Column(Float, default=0.3)       # Weight for soft match
+    hard_weight: float = Field(default=0.7)       # Weight for hard skills
+    soft_weight: float = Field(default=0.3)       # Weight for soft match
     
     # Skill analysis
-    matched_skills = Column(JSON)                  # Skills that matched
-    missing_skills = Column(JSON)                  # Skills missing from resume
-    extracted_resume_skills = Column(JSON)        # All skills found in resume
-    common_keywords = Column(JSON)                # Common keywords between texts
+    matched_skills: Optional[List[str]] = Field(default=[])
+    missing_skills: Optional[List[str]] = Field(default=[])
+    extracted_resume_skills: Optional[List[str]] = Field(default=[])
+    common_keywords: Optional[List[str]] = Field(default=[])
     
     # Feedback and recommendations
-    feedback = Column(Text)                       # Actionable feedback
-    recommendations = Column(JSON)               # Structured recommendations
+    feedback: Optional[str] = None
+    recommendations: Optional[List[str]] = Field(default=[])
     
     # Matching metadata
-    algorithm_version = Column(String(50))        # For tracking algorithm changes
-    processing_time_ms = Column(Integer)          # Performance tracking
+    algorithm_version: Optional[str] = None
+    processing_time_ms: Optional[int] = None
     
     # Additional analysis
-    skill_gap_analysis = Column(JSON)             # Detailed skill gap breakdown
-    improvement_suggestions = Column(JSON)       # Specific improvement areas
-    confidence_level = Column(Float)             # Algorithm confidence (0-1)
+    skill_gap_analysis: Optional[dict] = Field(default={})
+    improvement_suggestions: Optional[List[str]] = Field(default=[])
+    confidence_level: Optional[float] = None  # Algorithm confidence (0-1)
     
     # Status and flags
-    is_bookmarked = Column(Boolean, default=False) # User bookmarking
-    user_rating = Column(Integer)                 # User feedback (1-5 stars)
-    user_notes = Column(Text)                    # User's personal notes
+    is_bookmarked: bool = Field(default=False)
+    user_rating: Optional[int] = Field(default=None, ge=1, le=5)  # 1-5 stars
+    user_notes: Optional[str] = None
     
     # Audit trail
-    matched_by = Column(String(255))             # For future user authentication
-    match_context = Column(String(100))         # web_upload, api_call, batch_process
+    matched_by: Optional[str] = None  # For future user authentication
+    match_context: Optional[str] = None  # web_upload, api_call, batch_process
+    
+    class Settings:
+        name = "match_results"  # MongoDB collection name
+        indexes = [
+            "resume_id",
+            "job_description_id",
+            "overall_score",
+            "verdict",
+            "created_at",
+            [("resume_id", 1), ("job_description_id", 1)]  # Compound index
+        ]

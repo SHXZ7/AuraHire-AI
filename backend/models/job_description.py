@@ -1,51 +1,62 @@
 # backend/models/job_description.py
 
-from sqlalchemy import Column, String, Text, JSON, Integer, Boolean
+from typing import List, Optional
+from pydantic import Field
 from .base import BaseModel
 
 class JobDescription(BaseModel):
-    """Job Description model for storing parsed job data"""
-    __tablename__ = "job_descriptions"
+    """Job Description model for storing parsed job data in MongoDB"""
     
     # Basic job information
-    title = Column(String(255))
-    company = Column(String(255))
-    location = Column(String(255))
-    job_type = Column(String(50))  # full-time, part-time, contract, etc.
+    title: Optional[str] = Field(default=None, index=True)
+    company: Optional[str] = Field(default=None, index=True)
+    location: Optional[str] = None
+    job_type: Optional[str] = None  # full-time, part-time, contract, etc.
     
     # Raw content
-    raw_text = Column(Text, nullable=False)
-    cleaned_text = Column(Text)
+    raw_text: str = Field(...)
+    cleaned_text: Optional[str] = None
     
     # Extracted job details
-    role = Column(String(255))  # Detected role/title
-    must_have_skills = Column(JSON)  # Required skills
-    nice_to_have_skills = Column(JSON)  # Preferred skills
-    qualifications = Column(JSON)  # Education/certification requirements
-    experience_required = Column(String(100))  # e.g., "2-5 years"
+    role: Optional[str] = None  # Detected role/title
+    must_have_skills: Optional[List[str]] = Field(default=[], index=True)
+    nice_to_have_skills: Optional[List[str]] = Field(default=[])
+    qualifications: Optional[List[str]] = Field(default=[])
+    experience_required: Optional[str] = None  # e.g., "2-5 years"
     
     # Job sections
-    sections = Column(JSON)  # requirements, responsibilities, benefits, etc.
+    sections: Optional[dict] = Field(default={})
     
     # Statistics
-    total_characters = Column(Integer)
-    total_words = Column(Integer)
-    total_lines = Column(Integer)
-    must_have_skills_count = Column(Integer)
-    nice_to_have_skills_count = Column(Integer)
-    qualifications_count = Column(Integer)
+    total_characters: Optional[int] = None
+    total_words: Optional[int] = None
+    total_lines: Optional[int] = None
+    must_have_skills_count: Optional[int] = None
+    nice_to_have_skills_count: Optional[int] = None
+    qualifications_count: Optional[int] = None
     
     # Processing status
-    is_processed = Column(Boolean, default=False)
-    processing_error = Column(Text)
+    is_processed: bool = Field(default=False, index=True)
+    processing_error: Optional[str] = None
     
     # Metadata
-    created_by = Column(String(255))  # For future user authentication
-    job_url = Column(String(500))  # Original job posting URL
-    salary_range = Column(String(100))  # e.g., "$80k-$120k"
-    industry = Column(String(100))
-    tags = Column(JSON)  # For categorization
-    notes = Column(Text)  # For user notes
+    created_by: Optional[str] = None  # For future user authentication
+    job_url: Optional[str] = None  # Original job posting URL
+    salary_range: Optional[str] = None  # e.g., "$80k-$120k"
+    industry: Optional[str] = None
+    tags: Optional[List[str]] = Field(default=[])
+    notes: Optional[str] = None
     
     # Status
-    is_active = Column(Boolean, default=True)  # Whether job is still open
+    is_active: bool = Field(default=True, index=True)
+    
+    class Settings:
+        name = "job_descriptions"  # MongoDB collection name
+        indexes = [
+            "title",
+            "company",
+            "must_have_skills",
+            "is_processed",
+            "is_active",
+            "created_at"
+        ]
