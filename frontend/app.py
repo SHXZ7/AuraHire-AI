@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "http://127.0.0.1:8000"
+API_BASE_URL = "https://aurahire-ai-yfgg.onrender.com"
 
 def call_api(endpoint: str, method: str = "GET", data: Dict = None, files: Dict = None) -> Dict[Any, Any]:
     """Helper function to call FastAPI endpoints with improved error handling"""
