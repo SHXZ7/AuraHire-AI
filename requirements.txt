@@ -1,6 +1,7 @@
 # Web Framework
 fastapi==0.95.2
 uvicorn==0.22.0
+starlette==0.27.0   # Compatible with FastAPI 0.95.x
 
 # PDF & DOCX Parsing
 pdfplumber
