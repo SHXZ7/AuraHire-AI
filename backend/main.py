@@ -41,7 +41,15 @@ app.add_middleware(
 # Initialize MongoDB on startup
 @app.on_event("startup")
 async def startup_event():
-    await init_database()
+    try:
+        print("🔄 Initializing MongoDB connection...")
+        await init_database()
+        print("✅ MongoDB connection initialized successfully!")
+    except Exception as e:
+        print(f"❌ Failed to initialize MongoDB: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise e
 
 # Helper function for audit logging
 async def log_audit_event(
@@ -425,7 +433,9 @@ async def match_resume_file(
     
     try:
         # Parse resume
+        print(f"🔄 Processing file: {file.filename}")
         resume_text = await extract_text_from_file(file)
+        print(f"✅ Extracted {len(resume_text)} characters from resume")
         
         # Parse skills from comma-separated string
         skills_list = [skill.strip() for skill in jd_skills.split(",") if skill.strip()]
@@ -435,7 +445,9 @@ async def match_resume_file(
         print(f"DEBUG: Parsed skills_list: {skills_list}")
         
         # Perform matching
+        print("🔄 Starting resume-job matching...")
         result = match_resume_to_job(resume_text, jd_text, skills_list, hard_weight, soft_weight)
+        print(f"✅ Matching completed with score: {result.get('score', 0)}%")
         
         # Store job description in database if provided
         job_description_id = None
@@ -945,6 +957,53 @@ def root():
             "/jobs - Get stored job descriptions", 
             "/matches - Get match results",
             "/statistics - Get system statistics",
-            "/audit-logs - Get audit logs"
+            "/audit-logs - Get audit logs",
+            "/health - Health check"
         ]
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment monitoring"""
+    try:
+        # Test database connection
+        from .database.connection import mongodb_client
+        if mongodb_client is None:
+            return {
+                "status": "unhealthy",
+                "database": "not_connected",
+                "message": "MongoDB client not initialized"
+            }
+        
+        # Test database ping
+        await mongodb_client.admin.command('ping')
+        
+        # Test a simple count operation
+        from .models.resume import Resume
+        count = await Resume.count()
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "mongodb_ping": "success",
+            "resume_count": count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "database": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+@app.get("/test")
+async def simple_test():
+    """Simple test endpoint without database dependencies"""
+    return {
+        "status": "ok",
+        "message": "API is responding",
+        "timestamp": datetime.utcnow().isoformat(),
+        "python_version": "3.x",
+        "memory_usage": "N/A"
     }

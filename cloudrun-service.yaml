@@ -1,0 +1,83 @@
+# Google Cloud Run service configuration
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aurahire-ai
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        # Set memory and CPU limits
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "2"
+        # Set maximum request timeout (up to 3600 seconds for gen2)
+        run.googleapis.com/timeout: "300s"
+        # Set concurrency (requests per container instance)
+        run.googleapis.com/execution-environment: gen2
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/minScale: "0"
+    spec:
+      # Allow up to 1000 concurrent requests per container
+      containerConcurrency: 100
+      # Set request timeout
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/PROJECT_ID/aurahire-ai:latest
+        ports:
+        - containerPort: 8080
+        env:
+        # MongoDB connection
+        - name: MONGODB_URL
+          value: "mongodb+srv://shaaz:Shaaz123@cluster0.hp19dzy.mongodb.net/resume_matcher"
+        - name: MONGODB_MIN_CONNECTIONS
+          value: "5"
+        - name: MONGODB_MAX_CONNECTIONS
+          value: "20"
+        - name: MONGODB_SERVER_SELECTION_TIMEOUT_MS
+          value: "5000"
+        - name: MONGODB_CONNECT_TIMEOUT_MS
+          value: "10000"
+        - name: MONGODB_SOCKET_TIMEOUT_MS
+          value: "20000"
+        
+        # Application settings
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DEBUG
+          value: "False"
+        - name: MAX_FILE_SIZE_MB
+          value: "10"
+        - name: ALLOWED_FILE_TYPES
+          value: "pdf,doc,docx,txt"
+        
+        # Cloud Run specific
+        - name: PORT
+          value: "8080"
+        
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+          requests:
+            memory: "1Gi"
+            cpu: "1"
+        
+        # Health check
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
