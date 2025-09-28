@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from fastapi.middleware.cors import CORSMiddleware
 import time
-import asyncio
 from datetime import datetime
 
 # Import services & utils
@@ -44,35 +43,13 @@ app.add_middleware(
 async def startup_event():
     try:
         print("🔄 Initializing MongoDB connection...")
-        print("📡 Starting MongoDB connection with retry logic...")
-        
-        # Try to connect with retries
-        max_retries = 3
-        retry_delay = 5
-        
-        for attempt in range(max_retries):
-            try:
-                await init_database()
-                print("✅ MongoDB connection initialized successfully!")
-                return
-            except Exception as retry_e:
-                print(f"⚠️  MongoDB connection attempt {attempt + 1}/{max_retries} failed: {str(retry_e)}")
-                if attempt < max_retries - 1:
-                    print(f"🔄 Retrying in {retry_delay} seconds...")
-                    await asyncio.sleep(retry_delay)
-                else:
-                    print("❌ All MongoDB connection attempts failed")
-                    # Don't raise the exception - let the app start without DB
-                    # The health check will indicate the DB is not available
-                    print("🚀 Starting application without MongoDB connection...")
-                    print("⚠️  Database operations will fail until connection is restored")
-                    
+        await init_database()
+        print("✅ MongoDB connection initialized successfully!")
     except Exception as e:
-        print(f"❌ Startup event failed: {str(e)}")
+        print(f"❌ Failed to initialize MongoDB: {str(e)}")
         import traceback
         traceback.print_exc()
-        # Don't raise - let the app start
-        print("🚀 Starting application despite startup errors...")
+        raise e
 
 # Helper function for audit logging
 async def log_audit_event(
@@ -987,22 +964,16 @@ def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for deployment monitoring - Always returns 200 for Cloud Run"""
-    health_status = {
-        "service": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.0.0"
-    }
-    
+    """Health check endpoint for deployment monitoring"""
     try:
         # Test database connection
         from .database.connection import mongodb_client
         if mongodb_client is None:
-            health_status.update({
+            return {
+                "status": "unhealthy",
                 "database": "not_connected",
-                "message": "MongoDB client not initialized - service running without database"
-            })
-            return health_status
+                "message": "MongoDB client not initialized"
+            }
         
         # Test database ping
         await mongodb_client.admin.command('ping')
@@ -1011,20 +982,20 @@ async def health_check():
         from .models.resume import Resume
         count = await Resume.count()
         
-        health_status.update({
+        return {
+            "status": "healthy",
             "database": "connected",
             "mongodb_ping": "success",
-            "resume_count": count
-        })
-        
+            "resume_count": count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     except Exception as e:
-        health_status.update({
+        return {
+            "status": "unhealthy", 
             "database": "error",
             "error": str(e),
-            "message": "Service running but database unavailable"
-        })
-    
-    return health_status
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 @app.get("/test")
 async def simple_test():
