@@ -1,11 +1,36 @@
 runtime: python311
 
-# Environment variables
+# Use automatic scaling instead of basic scaling
+automatic_scaling:
+  min_instances: 0
+  max_instances: 3
+  target_cpu_utilization: 0.6
+
+# Resource settings to avoid internal errors
+resources:
+  cpu: 1
+  memory_gb: 1
+
+# Environment variables (use Secret Manager for production)
 env_variables:
   MONGODB_URL: "mongodb+srv://shaaz:Shaaz123@cluster0.hp19dzy.mongodb.net/resume_matcher"
   LOG_LEVEL: "INFO"
+  PYTHONPATH: "/app"
 
-# Basic scaling configuration
-basic_scaling:
-  max_instances: 3
-  idle_timeout: 300s
+# Health check configuration
+readiness_check:
+  path: "/health"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+
+liveness_check:
+  path: "/health"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 4
+  success_threshold: 2
+
+# Request timeout
+entrypoint: uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300
