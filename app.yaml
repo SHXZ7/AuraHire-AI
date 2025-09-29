@@ -1,0 +1,11 @@
+runtime: python311
+
+# Environment variables
+env_variables:
+  MONGODB_URL: "mongodb+srv://shaaz:Shaaz123@cluster0.hp19dzy.mongodb.net/resume_matcher"
+  LOG_LEVEL: "INFO"
+
+# Basic scaling configuration
+basic_scaling:
+  max_instances: 3
+  idle_timeout: 300s

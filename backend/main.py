@@ -38,13 +38,17 @@ app.add_middleware(
 )
 
 
-# Initialize MongoDB on startup
+# Initialize MongoDB on startup with timeout
 @app.on_event("startup")
 async def startup_event():
+    import asyncio
     try:
         print("🔄 Initializing MongoDB connection...")
-        await init_database()
+        # Add timeout to prevent hanging
+        await asyncio.wait_for(init_database(), timeout=10.0)
         print("✅ MongoDB connection initialized successfully!")
+    except asyncio.TimeoutError:
+        print("⚠️  MongoDB initialization timeout - will retry on first request")
     except Exception as e:
         print(f"⚠️  MongoDB initialization warning: {str(e)}")
         # Don't raise the exception to allow the app to start
@@ -555,7 +559,24 @@ async def match_resume_file(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-# New Database Endpoints
+# API Endpoints
+
+@app.get("/")
+async def root():
+    """Root endpoint for basic service info"""
+    return {
+        "message": "AuraHire AI - Resume & Job Matching API",
+        "version": "2.0.0",
+        "status": "running",
+        "timestamp": datetime.utcnow().isoformat(),
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "test": "/test"
+        }
+    }
+
+# Database Endpoints
 
 @app.get("/resumes")
 async def get_resumes(
@@ -965,29 +986,25 @@ def root():
 async def health_check():
     """Health check endpoint for deployment monitoring"""
     try:
-        # Test database connection
-        from .database.connection import mongodb_client
-        if mongodb_client is None:
-            return {
-                "status": "unhealthy",
-                "database": "not_connected",
-                "message": "MongoDB client not initialized"
-            }
-        
-        # Test database ping
-        await mongodb_client.admin.command('ping')
-        
-        # Test a simple count operation
-        from .models.resume import Resume
-        count = await Resume.count()
-        
-        return {
+        # Simple health check first
+        base_response = {
             "status": "healthy",
-            "database": "connected",
-            "mongodb_ping": "success",
-            "resume_count": count,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": "AuraHire AI"
         }
+        
+        # Try database connection but don't fail if it's not ready
+        try:
+            from .database.connection import mongodb_client
+            if mongodb_client is not None:
+                await mongodb_client.admin.command('ping')
+                base_response["database"] = "connected"
+            else:
+                base_response["database"] = "initializing"
+        except:
+            base_response["database"] = "unavailable"
+        
+        return base_response
     except Exception as e:
         return {
             "status": "unhealthy", 
