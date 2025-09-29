@@ -41,6 +41,7 @@ gcloud run deploy %SERVICE_NAME% ^
     --concurrency=100 ^
     --min-instances=0 ^
     --max-instances=10 ^
+    --set-env-vars="GOOGLE_RUNTIME=python311" ^
     --set-env-vars="MONGODB_URL=mongodb+srv://shaaz:Shaaz123@cluster0.hp19dzy.mongodb.net/resume_matcher,MONGODB_MIN_CONNECTIONS=5,MONGODB_MAX_CONNECTIONS=20,MONGODB_SERVER_SELECTION_TIMEOUT_MS=5000,MONGODB_CONNECT_TIMEOUT_MS=10000,MONGODB_SOCKET_TIMEOUT_MS=20000,LOG_LEVEL=INFO,DEBUG=False,MAX_FILE_SIZE_MB=10,ALLOWED_FILE_TYPES=pdf,doc,docx,txt"
 
 if errorlevel 1 (
