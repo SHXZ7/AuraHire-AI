@@ -7,6 +7,10 @@
 
 A comprehensive full-stack application featuring a Streamlit frontend and FastAPI backend with PostgreSQL database integration for intelligent resume-job matching.
 
+## Live App
+Check it out here: [https://aurahire-ai-xs4z7kkrlazyrbnpssquvx.streamlit.app/](https://aurahire-ai-xs4z7kkrlazyrbnpssquvx.streamlit.app/)
+
+
 ## Features
 
 🚀 **Quick Match Tab**
