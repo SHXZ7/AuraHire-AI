@@ -4,6 +4,8 @@
 .gcloudignore
 .git
 .gitignore
+Dockerfile
+.dockerignore
 
 # Python
 __pycache__/
