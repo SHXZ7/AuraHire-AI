@@ -46,10 +46,9 @@ async def startup_event():
         await init_database()
         print("✅ MongoDB connection initialized successfully!")
     except Exception as e:
-        print(f"❌ Failed to initialize MongoDB: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise e
+        print(f"⚠️  MongoDB initialization warning: {str(e)}")
+        # Don't raise the exception to allow the app to start
+        # This allows for graceful degradation if MongoDB is temporarily unavailable
 
 # Helper function for audit logging
 async def log_audit_event(

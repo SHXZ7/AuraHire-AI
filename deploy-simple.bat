@@ -6,7 +6,7 @@ setlocal enabledelayedexpansion
 
 set PROJECT_ID=distributed-inn-473215-u3
 set SERVICE_NAME=aurahire-ai
-set REGION=europe-west1
+set REGION=asia-south1
 
 echo 🚀 Deploying AuraHire AI to Cloud Run (using buildpacks, no Docker)
 echo 📋 Project: %PROJECT_ID%
