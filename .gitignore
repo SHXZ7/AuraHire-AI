@@ -56,7 +56,6 @@ venv.bak/
 .venv/
 
 # IDEs and editors
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -119,3 +118,7 @@ docs/_build/
 # Backup files
 *.bak
 *.backup
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
